@@ -41,6 +41,8 @@ import beast.core.parameter.RealParameter;
 import beast.evolution.tree.Node;
 import beast.evolution.tree.Tree;
 
+import org.apache.commons.math.distribution.GammaDistributionImpl;
+import org.apache.commons.math.distribution.NormalDistributionImpl;
 
 @Description("Standard prior for SnAP analysis, consisting of a Yule prior on the tree " +
         "(parameterized by lambda) " +
@@ -55,7 +57,7 @@ public class SnAPPrior extends Distribution {
     public Input<RealParameter> m_pLambda = new Input<RealParameter>("lambda", "Birth rate for the Yule model prior on the species tree");//, Validate.REQUIRED);
     public Input<Tree> m_pTree = new Input<Tree>("tree", "tree with phylogenetic relations"); //, Validate.REQUIRED);
 
-    
+
    enum Priors {
         gamma,inverseGamma,CIR,uniform
     }
@@ -90,12 +92,12 @@ public class SnAPPrior extends Distribution {
         double alpha = m_pAlpha.get().getValue();
         double beta = m_pBeta.get().getValue();
         double kappa = m_pKappa.get().getValue();
-        
+
         if (outsideBounds(m_pAlpha.get()) || outsideBounds(m_pBeta.get()) || outsideBounds(m_pKappa.get()) || outsideBounds(m_pCoalescenceRate.get())) {
         	logP = Double.NEGATIVE_INFINITY;
         	return logP;
         }
-        
+
         Tree tree = m_pTree.get();
         double heightsum = tree.getRoot().getHeight();
         heightsum += heightSum(tree.getRoot());
@@ -119,27 +121,39 @@ public class SnAPPrior extends Distribution {
                 logP += Math.log(mu*p1(xn,lambda,mu)/p0n);
             }
         }
-        
-        
+
+
         //Gamma values in tree
         RealParameter coalescenceRate = m_pCoalescenceRate.get();
 
-		
-		
+
+
 		if (PRIORCHOICE == 0) {
+// *****************************************************************************
 			//Assume independent gamma distributions for thetas.
-			
+
 			//We assume that 2/r has a gamma(alpha,beta) distribution. That means that r has density proportional to
 			// 1/(r^2)  * GAMMA(2/r|alpha,beta)
 			//which has log (alpha - 1.0)*Math.log(2.0/r) - (beta *(2.0/ r)) - 2*log(r), which in turn simplifies to the expr. below (w/ consts)
-		
+
+    
+      NormalDistributionImpl m_normal = new NormalDistributionImpl(alpha, beta);
+
 			for (int iNode = 0; iNode < coalescenceRate.getDimension(); iNode++) {
 				double r = coalescenceRate.getValue(iNode);
-				logP += -(alpha + 1.0)*Math.log(r) - 2.0* beta / r;
-			}
-		} else if (PRIORCHOICE == 1) {
+        // original log density
+				// logP += -(alpha + 1.0)*Math.log(r) - 2.0* beta / r;
+
+        // log-normal
+				double theta = 2/r;
+				logP += (m_normal.logDensity(Math.log(theta)) - Math.log(theta)) - (2.0*Math.log(r));
+
+      }
+
+// *****************************************************************************
+  	} else if (PRIORCHOICE == 1) {
 			//Assume independent inverse gamma distributions for thetas
-			
+
 			//We assume that (2/r) has an inverse gamma (alpha,beta) distribution. That means that r has density proportional to
 			// 1/(r^2) * INVGAMMA(2/r|alpha,beta)
 			//which has logarithm:
@@ -151,97 +165,97 @@ public class SnAPPrior extends Distribution {
 		} else if (PRIORCHOICE == 2) {
 	        //> let x be the root.
 	        //> r = rate for node x.
-    		
+
 			//> let x be the root.
 	        //> r = rate for node x.
     		double r = coalescenceRate.getArrayValue(tree.getRoot().getNr());
 	        //TEMPORARY!!!! logP += -(alpha + 1.0)*Math.log(r) - 2.0* beta / r;
-			
-			
+
+
 			logP += -(alpha*2 + 1.0)*Math.log(r) - 2.0* beta / r;
-			
-			
-			
+
+
+
 			/*
-			 
+
 			 The CIR process (Cox, Ingersoll and Ross 1985. Econometrica) has SDE
 			 dr = \kappa (\theta - r) dt + \sigma \sqrt{r} dz_1
-			 has a stationary distribution that is gamma with 
+			 has a stationary distribution that is gamma with
 				alpha = 2 \kappa \theta / \sigma^2
-			 and 
+			 and
 				beta = 2 \kappa / \sigma^2
 			 The correlation between time 0 and time t is  exp(-kappa t).
-			 
-			 
+
+
 			 Let c = 2 \kappa / (sigma^2 * (1 - exp(-kappa t)))
-			 
+
 			 If we condition on rate r0 at time 0, the distribution of 2*c*rt is non-central
-			 chi squared with 
-				2q+2 = 4\kappa \theta / sigma^2  
+			 chi squared with
+				2q+2 = 4\kappa \theta / sigma^2
 			 degrees of freedom and parameter of non-centrality
 				2u = c r_0 exp(-kappa t)
-			 
-			 
+
+
 			 Converting these into our set of parameters (alpha, beta, kappa) we have
 			 \theta = \alpha / \beta
 			 \sigma^2 = 2 \kappa / \beta
 			 so
 			 c = \beta/(1 - exp(-kappa t))
-			 
+
 			 df = 2q+2 = 2 \alpha
-			 
+
 			 nc= 2u = 2 \beta r_0 \frac{exp(-kappa t)}{1-\exp(-kappa t)}
-			 
+
 			 We are applying the CIR process to THETA = 2/r
-			 
+
 			*/
-			
-	        
+
+
 			/* Priors for the hyperparameters */
 			logP -= Math.log(kappa);
-			
-				
-			
-			
-			
+
+
+
+
+
 	        Node [] nodes = tree.getNodesAsArray();
-	        
+
 	        for (int iNode = 0; iNode < tree.getNodeCount(); iNode++) {
 	        	Node node = nodes[iNode];
 	        	if (!node.isRoot()) {
 	        		Node parent = node.getParent();
 	        		double t = parent.getHeight() - node.getHeight();
 	        		r = coalescenceRate.getArrayValue(node.getNr());
-					
-					
+
+
 					double r0 = coalescenceRate.getArrayValue(parent.getNr());
-										
+
 	        		//double r0 = parent.coalescenceRate(); <=== I think that this might be buggy.
-					
-					double theta0 = 2.0/r0;			
-					
-					
+
+					double theta0 = 2.0/r0;
+
+
 					double ekt = Math.exp(-kappa*t);
 					double c = beta / (1.0 - ekt);
 					double df = 2*alpha;
 					double nc = 2.0 * beta * theta0 * ekt / (1.0 - ekt);
 					double theta = 2.0/r;
-					
+
 					//System.err.println("kappa,t,beta,ekt,df,nc = "+kappa+", "+t+", "+beta+", "+ekt+", "+df+", "+nc);
-					
+
 					double p = ChiSquareNoncentralDist.density(df, nc, 2*c*theta);
-					
+
 	        		logP += Math.log(p) - 2.0 * Math.log(r);
 	        	}
 	        }
-			
-			
+
+
        		if (Double.isInfinite(logP)) {
        			// take care of numeric instability
        			logP = Double.NEGATIVE_INFINITY;
        		}
-	        
-			
+
+
 		} else {
 			//Assume that rate has uniform distribution on [[0,1000]
 			for (int iNode = 0; iNode < coalescenceRate.getDimension(); iNode++) {
@@ -250,12 +264,12 @@ public class SnAPPrior extends Distribution {
 					return Double.NEGATIVE_INFINITY;
 			}
 		}
-		
-		
-		
-		
-		
-		
+
+
+
+
+
+
         return logP;
     } // calculateLogLikelihood
 
@@ -303,4 +317,4 @@ public class SnAPPrior extends Distribution {
 	@Override public List<String> getArguments() {return null;}
 	@Override public List<String> getConditions() {return null;}
 	@Override public void sample(State state, Random random) {};
-} // class SSSPrior 
+} // class SSSPrior
