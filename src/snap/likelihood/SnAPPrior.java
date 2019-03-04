@@ -1,3 +1,7 @@
+// Modified by Cobb February 2019
+// Replaced gamma prior on coalsecent rate with log-normal
+
+
 
 /*
  * File SnAPPrior.java
@@ -129,28 +133,24 @@ public class SnAPPrior extends Distribution {
 
 
 		if (PRIORCHOICE == 0) {
-// *****************************************************************************
 			//Assume independent gamma distributions for thetas.
 
 			//We assume that 2/r has a gamma(alpha,beta) distribution. That means that r has density proportional to
 			// 1/(r^2)  * GAMMA(2/r|alpha,beta)
 			//which has log (alpha - 1.0)*Math.log(2.0/r) - (beta *(2.0/ r)) - 2*log(r), which in turn simplifies to the expr. below (w/ consts)
 
-    
       NormalDistributionImpl m_normal = new NormalDistributionImpl(alpha, beta);
 
 			for (int iNode = 0; iNode < coalescenceRate.getDimension(); iNode++) {
 				double r = coalescenceRate.getValue(iNode);
-        // original log density
+        // original log density, commented out by Cobb
 				// logP += -(alpha + 1.0)*Math.log(r) - 2.0* beta / r;
 
-        // log-normal
+        // log-normal, added by Cobb
 				double theta = 2/r;
 				logP += (m_normal.logDensity(Math.log(theta)) - Math.log(theta)) - (2.0*Math.log(r));
 
       }
-
-// *****************************************************************************
   	} else if (PRIORCHOICE == 1) {
 			//Assume independent inverse gamma distributions for thetas
 
