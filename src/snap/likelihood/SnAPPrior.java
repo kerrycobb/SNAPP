@@ -1,6 +1,8 @@
 // Modified by Cobb February 2019
 // Replaced gamma prior on coalsecent rate with log-normal
-
+// alpha = mu
+// beta = sigma
+// Multiply mu by 4 to make coalescent rate = starbeat dmv
 
 
 /*
@@ -139,7 +141,7 @@ public class SnAPPrior extends Distribution {
 			// 1/(r^2)  * GAMMA(2/r|alpha,beta)
 			//which has log (alpha - 1.0)*Math.log(2.0/r) - (beta *(2.0/ r)) - 2*log(r), which in turn simplifies to the expr. below (w/ consts)
 
-      NormalDistributionImpl m_normal = new NormalDistributionImpl(alpha, beta);
+      NormalDistributionImpl m_normal = new NormalDistributionImpl(4*alpha, beta);
 
 			for (int iNode = 0; iNode < coalescenceRate.getDimension(); iNode++) {
 				double r = coalescenceRate.getValue(iNode);
